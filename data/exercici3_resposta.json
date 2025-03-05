@@ -1,0 +1,105 @@
+{
+  "analisis": [
+    {
+      "imagen": {
+        "nombre_archivo": "02f4b3be2d.jpg"
+      },
+      "analisis": {
+        "nombre_comun": "Antejo americano",
+        "nombre_cientifico": "Antilocapra americana",
+        "clasificacion": {
+          "clase": "Mamalia",
+          "orden": "Artiodactyla",
+          "familia": "Antilocapridae"
+        },
+        "habitat": {
+          "tipos": [
+            "Praderas abiertas"
+          ],
+          "region": [
+            "Norte de América del Norte",
+            "Centro de América del Norte"
+          ],
+          "clima": [
+            "Templado"
+          ]
+        },
+        "dieta": {
+          "tipo": "Omnívoro",
+          "alimentos_principales": [
+            "Hierbas"
+          ]
+        },
+        "caracteristicas_fisicas": {
+          "tamaño": {
+            "altura_promedio_cm": "90-120cm",
+            "peso_promedio_kg": "30-50kg"
+          },
+          "colores_dominantes": [
+            "Café con rayas blancas"
+          ],
+          "rasgos_distintivos": [
+            "Cuernos curvados"
+          ]
+        },
+        "estado_conservacion": {
+          "clasificacion_IUCN": "Vulnerable",
+          "amenazas_principales": [
+            "Pérdida de hábitat, caza excesiva"
+          ]
+        }
+      }
+    },
+    {
+      "imagen": {
+        "nombre_archivo": "03d7fc0888.jpg"
+      },
+      "analisis": {
+        "nombre_comun": "Guanaco",
+        "nombre_cientifico": "Lama guanicoe",
+        "clasificacion": {
+          "clase": "Mamalia",
+          "orden": "Artiodactyla",
+          "familia": "Camelidae"
+        },
+        "habitat": {
+          "tipos": [
+            "Pantano"
+          ],
+          "region": [
+            "Patagonia",
+            "Sur de Argentina",
+            "Chile, Bolivia y Perú"
+          ],
+          "clima": [
+            "Desconocido"
+          ]
+        },
+        "dieta": {
+          "tipo": "Herbívoro",
+          "alimentos_principales": [
+            "Hierba"
+          ]
+        },
+        "caracteristicas_fisicas": {
+          "tamaño": {
+            "altura_promedio_cm": "90",
+            "peso_promedio_kg": "80"
+          },
+          "colores_dominantes": [
+            "Café oscuro"
+          ],
+          "rasgos_distintivos": [
+            "Patas largas"
+          ]
+        },
+        "estado_conservacion": {
+          "clasificacion_IUCN": "Vulnerable",
+          "amenazas_principales": [
+            "Habitat degradado"
+          ]
+        }
+      }
+    }
+  ]
+}
