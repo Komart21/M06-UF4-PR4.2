@@ -1,16 +1,16 @@
-// Requeriments
+// practica-codi/src/exercici2.js
 const csv = require('csv-parser');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
+const { makeOllamaRequest } = require('./ollamaClient'); // Importem el client Ollama
 
-// Constants
 const FOLDER_NAME = 'steamreviews';
 const GAMES_CSV = 'games.csv';
 const REVIEWS_CSV = 'reviews.csv';
 const OUTPUT_JSON = 'exercici2_resposta.json';
 
-// Funció per llegir el CSV de forma asíncrona
+// Funció per llegir el CSV (utilitzant Promises per consistència, però sense canvis substancials)
 async function processCSV(filePath) {
     const data = [];
     return new Promise((resolve, reject) => {
@@ -22,85 +22,45 @@ async function processCSV(filePath) {
     });
 }
 
-// Funció per analitzar el sentiment del text
+// Funció per analitzar el sentiment (ara utilitza el client Ollama)
 async function getSentiment(text) {
     try {
-        console.log('Enviant petició a Ollama...');
-        console.log('Model:', process.env.CHAT_API_OLLAMA_MODEL_TEXT);
-        
-        const response = await fetch(`${process.env.CHAT_API_OLLAMA_URL}/generate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: process.env.CHAT_API_OLLAMA_MODEL_TEXT,
-                prompt: `Analyze the sentiment of this text and respond with only one word (positive/negative/neutral): "${text}"`,
-                stream: false
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Error HTTP: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        
-        console.log('Resposta completa d\'Ollama:', JSON.stringify(data, null, 2));
-        
-        if (!data || !data.response) {
-            throw new Error('La resposta d\'Ollama no té el format esperat');
-        }
-
-        return data.response.trim().toLowerCase();
+        const prompt = `Analyze the sentiment of this text and respond with only one word (positive/negative/neutral): "${text}"`;
+        const response = await makeOllamaRequest(process.env.CHAT_API_OLLAMA_MODEL_TEXT, prompt);
+        return response.toLowerCase();
     } catch (error) {
-        console.error('Error en la petició a Ollama:', error);
-        return 'error';
+        console.error('Error getting sentiment:', error.message);
+        return 'error'; // Gestionem l'error retornant 'error'
     }
 }
 
 async function execute() {
     try {
-        // Obtenim la ruta del directori de dades
         const folderPath = process.env.DATA_PATH;
 
-        // Validem les variables d'entorn necessàries
-        if (!folderPath) {
-            throw new Error('La variable d\'entorn DATA_PATH no està definida');
-        }
-        if (!process.env.CHAT_API_OLLAMA_URL) {
-            throw new Error('La variable d\'entorn CHAT_API_OLLAMA_URL no està definida');
-        }
-        if (!process.env.CHAT_API_OLLAMA_MODEL_TEXT) {
-            throw new Error('La variable d\'entorn CHAT_API_OLLAMA_MODEL_TEXT no està definida');
+        if (!folderPath || !process.env.CHAT_API_OLLAMA_URL || !process.env.CHAT_API_OLLAMA_MODEL_TEXT) {
+            throw new Error('Les variables d\'entorn DATA_PATH, CHAT_API_OLLAMA_URL i CHAT_API_OLLAMA_MODEL_TEXT han d\'estar definides.');
         }
 
-        // Construïm les rutes completes als fitxers CSV
         const gamesPath = path.resolve(__dirname, '..', '..', 'data', FOLDER_NAME, GAMES_CSV);
         const reviewsPath = path.resolve(__dirname, '..', '..', 'data', FOLDER_NAME, REVIEWS_CSV);
 
-        // Validem si els fitxers existeixen
         if (!fs.existsSync(gamesPath) || !fs.existsSync(reviewsPath)) {
-            throw new Error('Algun dels fitxers CSV no existeix');
+            throw new Error('Algun dels fitxers CSV no existeix.');
         }
 
-        // Llegim els CSVs
         const gamesData = await processCSV(gamesPath);
         const reviewsData = await processCSV(reviewsPath);
-        const selectedGames = gamesData.slice(0, 2);  // Seleccionem els dos primers jocs
+        const selectedGames = gamesData.slice(0, 2);
         const finalResult = { timestamp: new Date().toISOString(), games: [] };
 
-        // Iterem pels dos primers jocs
         for (const game of selectedGames) {
             const gameReviews = reviewsData.filter(review => review.app_id === game.appid).slice(0, 2);
             const sentimentCount = { positive: 0, negative: 0, neutral: 0, error: 0 };
 
-            // Iterem per les primeres 2 reviews del joc
             for (const review of gameReviews) {
                 const sentiment = await getSentiment(review.content);
-                if (sentimentCount.hasOwnProperty(sentiment)) {
-                    sentimentCount[sentiment]++;
-                } else {
-                    sentimentCount.error++;
-                }
+                sentimentCount[sentiment] = (sentimentCount[sentiment] || 0) + 1; // Simplificació
             }
 
             finalResult.games.push({
@@ -110,14 +70,12 @@ async function execute() {
             });
         }
 
-        // Desa el resultat en un fitxer JSON
         const outputFilePath = path.resolve(__dirname, '..', '..', 'data', OUTPUT_JSON);
         fs.writeFileSync(outputFilePath, JSON.stringify(finalResult, null, 2));
         console.log('Resultat desat a', outputFilePath);
     } catch (error) {
-        console.error('Error durant l\'execució:', error);
+        console.error('Error durant l\'execució:', error.message); // Millora: missatge d'error més específic
     }
 }
 
-// Executem la funció principal
 execute();

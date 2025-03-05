@@ -1,16 +1,15 @@
-// Importaciones
+// practica-codi/src/exercici3.js
 const fs = require('fs').promises;
 const path = require('path');
 require('dotenv').config();
+const { makeOllamaRequest } = require('./ollamaClient'); // Importem el client Ollama
 
-// Constantes desde variables de entorno
 const IMAGES_SUBFOLDER = 'imatges/animals';
 const IMAGE_TYPES = ['.jpg', '.jpeg', '.png', '.gif'];
-const OLLAMA_URL = process.env.CHAT_API_OLLAMA_URL;
-const OLLAMA_MODEL = process.env.CHAT_API_OLLAMA_MODEL_VISION;
-const OUTPUT_FILE_PATH = path.resolve(__dirname, '..', '..', 'data', 'exercici3_resposta.json'); // Ruta del archivo de salida
+const OLLAMA_MODEL = process.env.CHAT_API_OLLAMA_MODEL_VISION; // Simplificació
+const OUTPUT_FILE_PATH = path.resolve(__dirname, '..', '..', 'data', 'exercici3_resposta.json');
 
-// Función para leer un archivo y convertirlo a Base64
+// Funció per convertir imatge a Base64 (sense canvis)
 async function convertirImagenABase64(rutaImagen) {
     try {
         const datos = await fs.readFile(rutaImagen);
@@ -21,52 +20,20 @@ async function convertirImagenABase64(rutaImagen) {
     }
 }
 
-// Función para realizar la petición a Ollama con detalles del error
+// Funció per realitzar la petició a Ollama (ara utilitza el client Ollama)
 async function realizarPeticionOllama(base64Imagen, mensaje) {
-    const cuerpoPeticion = {
-        model: OLLAMA_MODEL,
-        prompt: mensaje,
-        images: [base64Imagen],
-        stream: false
-    };
-
     try {
-        console.log('Enviando solicitud a Ollama...');
-        
-        let respuesta = await fetch(`${OLLAMA_URL}/generate`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(cuerpoPeticion)
-        });
-
-        if (!respuesta.ok) {
-            throw new Error(`Error HTTP: ${respuesta.status} ${respuesta.statusText}`);
-        }
-
-        const datos = await respuesta.json();
-
-        // Verificar si la respuesta es válida
-        if (!datos || !datos.response) {
-            throw new Error('La respuesta de Ollama no tiene el formato esperado');
-        }
-
-        return datos.response;
+        const respuesta = await makeOllamaRequest(OLLAMA_MODEL, mensaje, [base64Imagen]);
+        return respuesta;
     } catch (error) {
-        console.error('Error detallado en la solicitud a Ollama:', error);
+        console.error('Error en la solicitud a Ollama:', error.message);
         return null;
     }
 }
 
-// Función para guardar la respuesta en un archivo JSON
 async function guardarResultadoEnArchivo(respuestas) {
-    const estructuraRespuesta = {
-        analisis: respuestas
-    };
-
+    const estructuraRespuesta = { analisis: respuestas };
     try {
-        // Escribimos la respuesta en el archivo
         await fs.writeFile(OUTPUT_FILE_PATH, JSON.stringify(estructuraRespuesta, null, 2));
         console.log(`Respuesta guardada en ${OUTPUT_FILE_PATH}`);
     } catch (error) {
@@ -74,40 +41,32 @@ async function guardarResultadoEnArchivo(respuestas) {
     }
 }
 
-// Función principal
 async function ejecutarProceso() {
     try {
-        if (!process.env.DATA_PATH) {
-            throw new Error('La variable de entorno DATA_PATH no está definida.');
-        }
-        if (!OLLAMA_URL) {
-            throw new Error('La variable de entorno CHAT_API_OLLAMA_URL no está definida.');
-        }
-        if (!OLLAMA_MODEL) {
-            throw new Error('La variable de entorno CHAT_API_OLLAMA_MODEL no está definida.');
+        if (!process.env.DATA_PATH || !process.env.CHAT_API_OLLAMA_URL || !OLLAMA_MODEL) {
+            throw new Error('Les variables d\'entorn DATA_PATH, CHAT_API_OLLAMA_URL i CHAT_API_OLLAMA_MODEL_VISION han d\'estar definides.');
         }
 
         const carpetaImagenes = path.resolve(__dirname, '..', '..', 'data', IMAGES_SUBFOLDER);
         try {
             await fs.access(carpetaImagenes);
-        } catch (error) {
-            throw new Error(`El directorio de imágenes no existe: ${carpetaImagenes}`);
+        } catch {
+            throw new Error(`El directori d'imatges no existeix: ${carpetaImagenes}`);
         }
 
         const directoriosAnimales = await fs.readdir(carpetaImagenes);
-        let respuestasFinales = []; // Guardar todas las respuestas
+        let respuestasFinales = [];
 
         for (const directorioAnimal of directoriosAnimales) {
             const rutaDirectorio = path.join(carpetaImagenes, directorioAnimal);
 
             try {
-                const estadisticas = await fs.stat(rutaDirectorio);
-                if (!estadisticas.isDirectory()) {
-                    console.log(`Ignorando elemento no directorio: ${rutaDirectorio}`);
+                if (!(await fs.stat(rutaDirectorio)).isDirectory()) {
+                    console.log(`Ignorant element no directori: ${rutaDirectorio}`);
                     continue;
                 }
             } catch (error) {
-                console.error(`Error al obtener información del directorio: ${rutaDirectorio}`, error.message);
+                console.error(`Error en comprovar directori: ${rutaDirectorio}`, error.message);
                 continue;
             }
 
@@ -115,118 +74,96 @@ async function ejecutarProceso() {
 
             for (const archivoImagen of archivosImagen) {
                 const rutaImagen = path.join(rutaDirectorio, archivoImagen);
-                const extension = path.extname(rutaImagen).toLowerCase();
-                
-                if (!IMAGE_TYPES.includes(extension)) {
-                    console.log(`Ignorando archivo no válido: ${rutaImagen}`);
+                if (!IMAGE_TYPES.includes(path.extname(rutaImagen).toLowerCase())) {
+                    console.log(`Ignorant arxiu no vàlid: ${rutaImagen}`);
                     continue;
                 }
 
                 const cadenaBase64 = await convertirImagenABase64(rutaImagen);
+                if (!cadenaBase64) continue;
 
-                if (cadenaBase64) {
-                    console.log(`\nProcesando imagen: ${rutaImagen}`);
-                    console.log(`Tamaño de la imagen en Base64: ${cadenaBase64.length} caracteres`);
-                    
-                    // Actualizamos el mensaje para solicitar más detalles sobre el animal
-                    const mensaje = `
-                        Responde solo con un objeto JSON con las siguientes claves, sin explicaciones ni comentarios adicionales. Si no puedes identificar un dato, usa "Desconocido" o "Desconocida" según corresponda:
-                        {
-                            "nombre_comun": "valor",
-                            "nombre_cientifico": "valor",
-                            "clasificacion": {
-                                "clase": "valor",
-                                "orden": "valor",
-                                "familia": "valor"
+                console.log(`\nProcessant imatge: ${rutaImagen}`);
+                const mensaje = `
+                    Respon només amb un objecte JSON amb les següents claus, sense explicacions ni comentaris addicionals. Si no pots identificar una dada, utilitza "Desconegut" o "Desconeguda" segons correspongui:
+                    {
+                        "nombre_comun": "valor",
+                        "nombre_cientifico": "valor",
+                        "clasificacion": { "clase": "valor", "orden": "valor", "familia": "valor" },
+                        "habitat": { "tipos": ["valor"], "region": ["valor"], "clima": ["valor"] },
+                        "dieta": { "tipo": "valor", "alimentos_principales": ["valor"] },
+                        "caracteristicas_fisicas": {
+                            "tamaño": { "altura_promedio_cm": "valor", "peso_promedio_kg": "valor" },
+                            "colores_dominantes": ["valor"],
+                            "rasgos_distintivos": ["valor"]
+                        },
+                        "estado_conservacion": { "clasificacion_IUCN": "valor", "amenazas_principales": ["valor"] }
+                    }
+                `;
+
+                let respuesta = await realizarPeticionOllama(cadenaBase64, mensaje);
+                if (!respuesta) {
+                    console.error(`No s'ha rebut resposta per a ${archivoImagen}`);
+                    continue;
+                }
+
+                console.log(`\nResposta d'Ollama per a ${archivoImagen}:`);
+                console.log(respuesta);
+                // No cal fer JSON.parse(respuesta) - ja és un objecte JSON
+
+                try {
+                    respuesta = JSON.parse(respuesta) //Afegim el parse per que funcioni correctament.
+                    const analisis = {
+                        imagen: { nombre_archivo: archivoImagen },
+                        analisis: {
+                            nombre_comun: respuesta.nombre_comun || "Desconocido",
+                            nombre_cientifico: respuesta.nombre_cientifico || "Desconocido",
+                            clasificacion: {
+                                clase: respuesta.clasificacion?.clase || "Desconocida",
+                                orden: respuesta.clasificacion?.orden || "Desconocido",
+                                familia: respuesta.clasificacion?.familia || "Desconocida",
                             },
-                            "habitat": {
-                                "tipos": ["valor"],
-                                "region": ["valor"],
-                                "clima": ["valor"]
+                            habitat: {
+                                tipos: respuesta.habitat?.tipos || ["Desconocido"],
+                                region: respuesta.habitat?.region || ["Desconocida"],
+                                clima: respuesta.habitat?.clima || ["Desconocido"],
                             },
-                            "dieta": {
-                                "tipo": "valor",
-                                "alimentos_principales": ["valor"]
+                            dieta: {
+                                tipo: respuesta.dieta?.tipo || "Desconocido",
+                                alimentos_principales: respuesta.dieta?.alimentos_principales || ["Desconocidos"],
                             },
-                            "caracteristicas_fisicas": {
-                                "tamaño": {
-                                    "altura_promedio_cm": "valor",
-                                    "peso_promedio_kg": "valor"
+                            caracteristicas_fisicas: {
+                                tamaño: {
+                                    altura_promedio_cm: respuesta.caracteristicas_fisicas?.tamaño?.altura_promedio_cm || "Desconocida",
+                                    peso_promedio_kg: respuesta.caracteristicas_fisicas?.tamaño?.peso_promedio_kg || "Desconocido",
                                 },
-                                "colores_dominantes": ["valor"],
-                                "rasgos_distintivos": ["valor"]
+                                colores_dominantes: respuesta.caracteristicas_fisicas?.colores_dominantes || ["Desconocidos"],
+                                rasgos_distintivos: respuesta.caracteristicas_fisicas?.rasgos_distintivos || ["Desconocidos"],
                             },
-                            "estado_conservacion": {
-                                "clasificacion_IUCN": "valor",
-                                "amenazas_principales": ["valor"]
+                            estado_conservacion: {
+                                clasificacion_IUCN: respuesta.estado_conservacion?.clasificacion_IUCN || "Desconocida",
+                                amenazas_principales: respuesta.estado_conservacion?.amenazas_principales || ["Desconocidas"],
                             }
                         }
-                    `;
-                    
-                    
-                    let respuesta = await realizarPeticionOllama(cadenaBase64, mensaje);
-
-                    if (respuesta) {
-                        console.log(`\nRespuesta de Ollama para ${archivoImagen}:`);
-                        console.log(respuesta);
-                        respuesta = JSON.parse(respuesta);
-
-                        // Crear la estructura de la respuesta para este archivo de imagen
-                        const analisis = {
-                            imagen: {
-                                nombre_archivo: archivoImagen,
-                            },
-                            analisis: {
-                                nombre_comun: respuesta.nombre_comun || "Desconocido",
-                                nombre_cientifico: respuesta.nombre_cientifico || "Desconocido",
-                                clasificacion: {
-                                    clase: respuesta.clasificacion?.clase || "Desconocida",
-                                    orden: respuesta.clasificacion?.orden || "Desconocido",
-                                    familia: respuesta.clasificacion?.familia || "Desconocida",
-                                },
-                                habitat: {
-                                    tipos: respuesta.habitat?.tipos || ["Desconocido"],
-                                    region: respuesta.habitat?.region || ["Desconocida"],
-                                    clima: respuesta.habitat?.clima || ["Desconocido"],
-                                },
-                                dieta: {
-                                    tipo: respuesta.dieta?.tipo || "Desconocido",
-                                    alimentos_principales: respuesta.dieta?.alimentos_principales || ["Desconocidos"],
-                                },
-                                caracteristicas_fisicas: {
-                                    tamaño: {
-                                        altura_promedio_cm: respuesta.caracteristicas_fisicas?.tamaño?.altura_promedio_cm || "Desconocida",
-                                        peso_promedio_kg: respuesta.caracteristicas_fisicas?.tamaño?.peso_promedio_kg || "Desconocido",
-                                    },
-                                    colores_dominantes: respuesta.caracteristicas_fisicas?.colores_dominantes || ["Desconocidos"],
-                                    rasgos_distintivos: respuesta.caracteristicas_fisicas?.rasgos_distintivos || ["Desconocidos"],
-                                },
-                                estado_conservacion: {
-                                    clasificacion_IUCN: respuesta.estado_conservacion?.clasificacion_IUCN || "Desconocida",
-                                    amenazas_principales: respuesta.estado_conservacion?.amenazas_principales || ["Desconocidas"],
-                                }
-                            }
-                        };
-
-                        // Agregamos el análisis de esta imagen
-                        respuestasFinales.push(analisis);
-                    } else {
-                        console.error(`\nNo se recibió una respuesta válida para ${archivoImagen}`);
-                    }
-                    console.log('------------------------');
+                    };
+                    respuestasFinales.push(analisis);
+                } catch (parseError) {
+                        console.error(`Error al parsejar la respuesta JSON de ${archivoImagen}:`, parseError.message);
+                        // Considera afegir la imatge actual a 'respuestasFinales' amb un indicador d'error
+                        respuestasFinales.push({
+                            imagen: { nombre_archivo: archivoImagen, error: "Error al parsejar la respuesta JSON" }
+                        });
                 }
             }
-            console.log(`\nFinalizamos después de procesar el primer directorio.`);
-            break; // Detenemos la ejecución después de procesar el primer directorio
+            //Eliminem el break per a que s'executi amb totes les imatges
+            // console.log(`\nFinalitzem després de processar el primer directori.`);
+            // break; // Eliminat el break
         }
 
-        // Después de procesar todas las imágenes, guardamos las respuestas en el archivo
         await guardarResultadoEnArchivo(respuestasFinales);
 
     } catch (error) {
-        console.error('Error durante la ejecución:', error.message);
+        console.error('Error durant l\'execució:', error.message); // Millora: missatge d'error més específic
     }
 }
 
-// Ejecutamos la función principal
 ejecutarProceso();
